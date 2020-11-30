@@ -25,11 +25,6 @@ class Config {
 	protected $type_registry;
 
 	/**
-	 * @var array <string> List of field names registered to the Schema
-	 */
-	protected $registered_field_names;
-
-	/**
 	 * Initialize WPGraphQL to ACF
 	 *
 	 * @param \WPGraphQL\Registry\TypeRegistry $type_registry Instance of the WPGraphQL TypeRegistry
@@ -54,13 +49,6 @@ class Config {
 		$this->add_acf_fields_to_users();
 		$this->add_acf_fields_to_options_pages();
 		$this->add_acf_fields_to_pages();
-
-		add_filter( 'graphql_resolve_revision_meta_from_parent', function( $should, $object_id, $meta_key, $single ) {
-			if ( in_array( $meta_key, $this->registered_field_names, true ) ) {
-				return false;
-			}
-			return $should;
-		}, 10, 4 );
 	}
 
 	/**
@@ -373,8 +361,6 @@ class Config {
 			return false;
 		}
 
-
-
 		/**
 		 * filter the field config for custom field types
 		 *
@@ -447,7 +433,7 @@ class Config {
 				$field_config['type'] = 'String';
 				break;
 			case 'range':
-				$field_config['type'] = 'Float';
+				$field_config['type'] = 'Integer';
 				break;
 			case 'number':
 				$field_config['type'] = 'Float';
@@ -745,24 +731,18 @@ class Config {
 					}
 				}
 
-				$is_multiple = isset($acf_field['field_type']) && in_array( $acf_field['field_type'], array('checkbox', 'multi_select'));
-
 				$field_config = [
-					'type'    => $is_multiple ? ['list_of' => $type ] : $type,
-					'resolve' => function( $root, $args, $context, $info ) use ( $acf_field, $is_multiple ) {
+					'type'    => [ 'list_of' => $type ],
+					'resolve' => function( $root, $args, $context, $info ) use ( $acf_field ) {
 						$value = $this->get_acf_field_value( $root, $acf_field );
-						/**
-						 * If this is multiple, the value will most likely always be an array.
-						 * If it isn't, we want to return a single term id.
-						 */
+						$terms = [];
 						if ( ! empty( $value ) && is_array( $value ) ) {
 							foreach ( $value as $term ) {
 								$terms[] = DataSource::resolve_term_object( (int) $term, $context );
 							}
-							return $terms;
-						} else {
-							return DataSource::resolve_term_object( (int) $value, $context );
 						}
+
+						return $terms;
 					},
 				];
 				break;
@@ -1021,7 +1001,7 @@ class Config {
 
 							$layout['parent']          = $acf_field;
 							$layout['show_in_graphql'] = isset( $acf_field['show_in_graphql'] ) ? (bool) $acf_field['show_in_graphql'] : true;
-							$this->add_field_group_fields( $layout, $flex_field_layout_name, true );
+							$this->add_field_group_fields( $layout, $flex_field_layout_name );
 						}
 					}
 
@@ -1050,7 +1030,6 @@ class Config {
 
 		$config = array_merge( $config, $field_config );
 
-		$this->registered_field_names[] = $acf_field['name'];
 		return $this->type_registry->register_field( $type_name, $field_name, $config );
 	}
 
@@ -1059,9 +1038,8 @@ class Config {
 	 *
 	 * @param array  $field_group The group to add to the Schema.
 	 * @param string $type_name   The Type name in the GraphQL Schema to add fields to.
-	 * @param bool   $layout      Whether or not these fields are part of a Flex Content layout.
 	 */
-	protected function add_field_group_fields( $field_group, $type_name, $layout = false ) {
+	protected function add_field_group_fields( $field_group, $type_name ) {
 
 		/**
 		 * If the field group has the show_in_graphql setting configured, respect it's setting
@@ -1080,7 +1058,7 @@ class Config {
 		/**
 		 * Get the fields in the group.
 		 */
-		$acf_fields = ! empty( $field_group['sub_fields'] ) || $layout ? $field_group['sub_fields'] : acf_get_fields( $field_group );
+		$acf_fields = ! empty( $field_group['sub_fields'] ) ? $field_group['sub_fields'] : acf_get_fields( $field_group );
 
 		/**
 		 * If there are no fields, bail
@@ -1751,8 +1729,7 @@ class Config {
 		}
 	}
 
-}
-/**
+	/**
 	 * Add field groups for `page_type` and `page_template`.
 	 * Note that these will show up for all pages in the schema,
 	 * they will not be limited to the page types or templates assigned in the field group.
