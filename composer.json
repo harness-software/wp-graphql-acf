@@ -1,6 +1,6 @@
 {
-  "name": "wp-graphql/wp-graphql-acf",
-  "description": "Advanced Custom Fields bindings for wp-graphql",
+  "name": "harness-software/wp-graphql-acf",
+  "description": "Forked Version of Advanced Custom Fields bindings for wp-graphql",
   "type": "wordpress-plugin",
   "license": "GPL-3.0+",
   "authors": [{
